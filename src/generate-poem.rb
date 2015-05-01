@@ -1,61 +1,64 @@
 require 'treat'
 
 class Poem
-    PRONOUNS = ['I', 'you', 'thou', 'ye', 'he', 'she', 'it', 'they', 'we']
-
     include Treat::Core::DSL
+
+    PRONOUNS = ['I', 'you', 'thou', 'ye', 'he', 'she', 'it', 'they', 'we']
+    THRESHOLD = 10
+    EXCLUDED = ['and', 'the', 'or', 'of', 'a', 'the', 'then', 'to', 'not', 'as', 'in', 'with']
 
     private_constant :PRONOUNS
 
     def initialize
-        generate_poem
-    end
-
-    def generate_poem
         data = get_verse_data()
         verses = rand 3..10
-        poem = []
 
-        poem = pick_verses data, verses, poem
-
-        puts poem
+        generate(data, verses)
     end
 
+    def generate(data, verses)
+        poem = []
+        poem = pick_verses data, verses, poem
+        poem_score = score(poem)
+
+        if (poem_score > THRESHOLD)
+            puts poem
+        else
+            generate(data, verses)
+        end
+    end
 
     def pick_verses(data, verses, poem)
         if verses <= 0 then return poem end
 
         chosen_base = data[rand(data.length)]
-        chosen_verse = chosen_base[rand(chosen_base.length)]
 
-        if good_enough? chosen_verse, poem
-            poem.push chosen_verse
-            verses -= 1
-        end
+        poem.push(chosen_base[rand(chosen_base.length)])
 
-        pick_verses data, verses, poem
+        pick_verses data, verses - 1, poem
     end
 
-    def good_enough?(chosen_verse, poem)
-        last_verse = poem[-1]
+    def score(poem)
+        repeated_words(poem)
+    end
 
-        if last_verse == nil
-            return true
+    def repeated_words(poem)
+        count = 0
+        poem = poem.join(' ').downcase
+        words = poem.scan(/\w{3,}/).delete_if {|word| EXCLUDED.include? word }
+        words = words.group_by { |word| word }
+        words.each do |word, instances|
+            count += word.size if instances.size > 1
         end
 
-        if repeats_word_category?(chosen_verse, last_verse) == false
-            return true
-        end
+        count
+    end
 
-        if contains_personal_pronoun?(last_verse) == false
-            return true
-        end
+    def contains_repeated_words?(new_verse, poem)
+        poem = poem.join(' ').split(' ')
+        new_verse =  new_verse.split(' ')
 
-        if contains_same_pronoun?(chosen_verse, last_verse)
-            return true
-        end
-
-        false
+        (poem & new_verse).length
     end
 
     def repeats_word_category?(new_verse, old_verse)
@@ -90,7 +93,6 @@ class Poem
         category
     end
 
-
     def contains_same_pronoun?(new_verse, old_verse)
         old_verse = old_verse.split(' ')
         new_verse = new_verse.split(' ')
@@ -114,7 +116,6 @@ class Poem
         return result > 0 ? true : false
     end
 
-
     def get_verse_data
         data_dir = './data/parsed'
         data = []
@@ -128,14 +129,11 @@ class Poem
         data
     end
 
-
     def get_poem(filename, data_dir)
         poem = IO.read data_dir + '/' + filename
         poem.split("\n")
     end
 
-
 end
-
 
 Poem.new
