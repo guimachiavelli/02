@@ -3,9 +3,9 @@ require 'treat'
 class Poem
     include Treat::Core::DSL
 
-    PRONOUNS = ['I', 'you', 'thou', 'ye', 'he', 'she', 'it', 'they', 'we']
-    THRESHOLD = 10
-    EXCLUDED = ['and', 'the', 'or', 'of', 'a', 'the', 'then', 'to', 'not', 'as', 'in', 'with']
+    PRONOUNS = ['I', 'you', 'thou', 'ye', 'he', 'she', 'it', 'they', 'we', 'thee', 'thine', 'its', 'her', 'his', 'yours', 'mine', 'my', 'our', 'us', 'ours']
+    THRESHOLD = 20
+    EXCLUDED = ['and', 'the', 'or', 'of', 'a', 'that', 'than', 'this', 'then', 'to', 'not', 'as', 'in', 'with', 'of', 'an', 'in', 'by']
 
     private_constant :PRONOUNS
 
@@ -21,11 +21,28 @@ class Poem
         poem = pick_verses data, verses, poem
         poem_score = score(poem)
 
+        #return poem
+
         if (poem_score > THRESHOLD)
-            puts poem
+            poem = process poem;
+            puts poem.join("\n")
         else
             generate(data, verses)
         end
+    end
+
+    def process(poem)
+        poem = poem.map { |verse| verse.gsub(/\s+\d+/, '') }
+        poem = poem.map { |verse| verse.gsub(/[\^\’\'\[\]\(\){}⟨⟩:,\،\‒\…\.\‐\-\‘\’\“\”\'\"\;\/]?$/,'') }
+        poem = poem.map { |verse| close_quotes verse }
+
+        poem
+    end
+
+    def close_quotes(verse)
+        instances = verse.count('"')
+        return verse if instances > 1 || instances == 0
+        verse + '"'
     end
 
     def pick_verses(data, verses, poem)
@@ -39,7 +56,13 @@ class Poem
     end
 
     def score(poem)
-        repeated_words(poem)
+        points = repeated_words(poem)
+        points += pronouns_count(poem)
+        points += last_punctuation(poem)
+        points += verse_connections(poem)
+
+
+        points
     end
 
     def repeated_words(poem)
@@ -54,14 +77,40 @@ class Poem
         count
     end
 
-    def contains_repeated_words?(new_verse, poem)
-        poem = poem.join(' ').split(' ')
-        new_verse =  new_verse.split(' ')
+    def pronouns_count(poem)
+        count = 0
 
-        (poem & new_verse).length
+        poem = poem.join(' ').downcase.split(' ')
+        count = poem & PRONOUNS
+
+        return 10 if count.length == 1
+        return (-5 * count.length)
+    end
+
+    def last_punctuation(poem)
+        verse = poem[-1]
+
+        return 5 if verse.end_with? '.'
+        return 5 if verse.end_with? '?'
+        return 5 if verse.end_with? '!'
+        return -10 if verse.end_with? ','
+        return -10 if verse.end_with? ';'
+        return -5
+    end
+
+    def verse_connections(poem)
+        points = 0
+        previous_verse = nil
+        poem.each do |verse|
+            points -= 5 if repeats_word_category?(verse, previous_verse)
+            previous_verse = verse
+        end
+
+        points
     end
 
     def repeats_word_category?(new_verse, old_verse)
+        return if new_verse == nil || old_verse == nil
         verse_first_word_category(new_verse) == verse_last_word_category(old_verse)
     end
 
@@ -91,29 +140,6 @@ class Poem
         end
 
         category
-    end
-
-    def contains_same_pronoun?(new_verse, old_verse)
-        old_verse = old_verse.split(' ')
-        new_verse = new_verse.split(' ')
-
-        old_pronouns = old_verse & PRONOUNS
-        new_pronouns = new_verse & PRONOUNS
-
-        result = (old_pronouns & new_pronouns).length
-
-        return result > 0 ? true : false
-    end
-
-    def contains_personal_pronoun?(verse)
-        result = nil
-
-        verse = verse.split(' ')
-
-        # intersection between array with all verse words and all pronouns
-        result = (verse & PRONOUNS).length
-
-        return result > 0 ? true : false
     end
 
     def get_verse_data
